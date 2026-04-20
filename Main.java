@@ -1,8 +1,6 @@
-package com.mycompany.fantasy.shop;
-
 public class Main {
-  public static void main(String[] args) {
-    Game game = new Game();
-    game.start();
-  }
+    public static void main(String[] args) {
+        GameManager game = new GameManager();
+        game.startGame();
+    }
 }

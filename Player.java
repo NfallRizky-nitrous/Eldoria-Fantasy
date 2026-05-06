@@ -1,3 +1,14 @@
+/*
+ * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
+ * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
+ */
+package com.mycompany.fantasy.shop;
+
+/**
+ *
+ * @author Asus
+ */
+import com.mycompany.fantasy.shop.gui.GUIBridge;
 import java.util.ArrayList;
 
 public class Player {
@@ -6,53 +17,133 @@ public class Player {
     private int exp;
     private int level;
     private int reputation;
+    private int defense = 5;
     private ArrayList<Item> inventory;
 
-    public Player(String name) {
+    private int maxHp;
+    private int hp;
+    private int attack;
+    private boolean defending;
+
+    private int dailyGoldStart;
+    private int dailyRepStart;
+
+    private GUIBridge bridge;
+
+    public Player(String name, int par) {
         this.name       = name;
         this.gold       = 80;
         this.exp        = 0;
         this.level      = 1;
         this.reputation = 20;
         this.inventory  = new ArrayList<>();
+        this.maxHp      = 120;
+        this.hp         = 120;
+        this.attack     = 10;
+        this.defending  = false;
     }
 
-    // ── Getter ──────────────────────────────────
-    public String getName()              { return name; }
-    public int getGold()                 { return gold; }
-    public int getExp()                  { return exp; }
-    public int getLevel()                { return level; }
-    public int getReputation()           { return reputation; }
-    public ArrayList<Item> getInventory(){ return inventory; }
+    public void setBridge(GUIBridge bridge) {
+        this.bridge = bridge;
+    }
 
-    // ── Gold ────────────────────────────────────
+    private void updateGUI() {
+        if (bridge != null) bridge.refreshStatus();
+    }
+
+    private void log(String text) {
+        if (bridge != null) bridge.appendLog(text);
+    }
+
+    public void snapshotDayStart() {
+        dailyGoldStart = gold;
+        dailyRepStart  = reputation;
+    }
+
+    public void showDailySummary(int day) {
+        int goldDiff = gold - dailyGoldStart;
+        int repDiff  = reputation - dailyRepStart;
+        log("\n=============================================");
+        log("         RINGKASAN HARI KE-" + day);
+        log("=============================================");
+        log(String.format("  Gold     : %d  (%s%d)", gold, goldDiff >= 0 ? "+" : "", goldDiff));
+        log(String.format("  Reputasi : %d  (%s%d)", reputation, repDiff >= 0 ? "+" : "", repDiff));
+        log(String.format("  HP       : %d / %d", hp, maxHp));
+        log(String.format("  Item     : %d item di inventory", inventory.size()));
+        log("=============================================");
+    }
+
+    public String getName()               { return name; }
+    public int getGold()                  { return gold; }
+    public int getExp()                   { return exp; }
+    public int getLevel()                 { return level; }
+    public int getReputation()            { return reputation; }
+    public ArrayList<Item> getInventory() { return inventory; }
+    public int getHp()                    { return hp; }
+    public int getMaxHp()                 { return maxHp; }
+    public int getAttack()                { return attack; }
+    public boolean isDefending()          { return defending; }
+    public void setDefending(boolean v)   { defending = v; }
+    
+    public void setHp(int hp) { this.hp = hp; updateGUI(); }
+    public void setMaxHp(int maxHp) { this.maxHp = maxHp; updateGUI(); }
+    public void setGold(int gold) { this.gold = gold; updateGUI(); }
+    public void setReputation(int rep) { this.reputation = rep; updateGUI(); }
+
     public void gainGold(int amount) {
         if (amount <= 0) return;
         gold += amount;
-        System.out.println("💰 Gold bertambah +" + amount + " (Total: " + gold + ")");
+        log("💰 Gold bertambah +" + amount + " (Total: " + gold + ")");
+        updateGUI();
     }
 
     public void spendGold(int amount) {
         if (amount <= 0) return;
         if (gold >= amount) {
             gold -= amount;
-            System.out.println("💸 Gold digunakan -" + amount + " (Sisa: " + gold + ")");
+            log("💸 Gold digunakan -" + amount + " (Sisa: " + gold + ")");
         } else {
-            // Kalau tidak mampu bayar penuh, kurangi semua gold yang ada
-            System.out.println("❌ Gold tidak cukup! Kehilangan semua gold (" + gold + ")");
+            log("⚠️ Gold tidak cukup! Kehilangan semua gold (" + gold + ")");
             gold = 0;
         }
+        updateGUI();
     }
 
-    // ── EXP & Level Up ──────────────────────────
+    public void spendGoldSilent(int amount) {
+        gold = Math.max(0, gold - amount);
+        updateGUI();
+    }
+
+    public void takeDamage(int damage) {
+        int finalDamage = Math.max(1, damage - defense); 
+        hp = Math.max(0, hp - finalDamage);
+        updateGUI();
+    }
+
+    public void healHp(int amount) {
+        int before = hp;
+        hp = Math.min(maxHp, hp + amount);
+        log("❤️ HP pulih +" + (hp - before) + " (" + hp + "/" + maxHp + ")");
+        updateGUI();
+    }
+
+    public void restHeal() {
+        int healed = 20 + (level * 3);
+        int before = hp;
+        hp = Math.min(maxHp, hp + healed);
+        log("🌙 Kamu beristirahat. HP pulih +" + (hp - before) + " (" + hp + "/" + maxHp + ")");
+        updateGUI();
+    }
+
+    public boolean isAlive() { return hp > 0; }
+
     public void gainExp(int amount) {
         if (amount <= 0) return;
         exp += amount;
-        System.out.println("⭐ EXP bertambah +" + amount + " (" + exp + "/" + expNeeded() + ")");
+        log("✨ EXP bertambah +" + amount + " (" + exp + "/" + expNeeded() + ")");
         checkLevelUp();
     }
 
-    // EXP yang dibutuhkan makin besar seiring level
     private int expNeeded() {
         return 100 + (level - 1) * 30;
     }
@@ -61,78 +152,100 @@ public class Player {
         while (exp >= expNeeded()) {
             exp -= expNeeded();
             level++;
-            System.out.println();
-            System.out.println("╔══════════════════════════════╗");
-            System.out.println("║   🎉  LEVEL UP! Level " + level + "   🎉  ║");
-            System.out.println("╚══════════════════════════════╝");
+            log("\n🎊 *** LEVEL UP! Sekarang Level " + level + " ***");
             applyLevelUpBonus();
         }
     }
 
-    // Efek nyata dari level up
     private void applyLevelUpBonus() {
         int goldBonus = level * 20;
         gainGold(goldBonus);
-        System.out.println("► Bonus gold naik level: +" + goldBonus);
-        System.out.println("► Customer per hari bertambah (level " + level + " → +" + level + " customer)");
-        System.out.println("► Peluang sukses lawan pencuri/preman meningkat");
+        maxHp   += 15;
+        hp       = maxHp;
+        attack  += 3;
+        log("> 🎁 Bonus gold     : +" + goldBonus);
+        log("> ❤️ Max HP naik    : +15 (Sekarang " + maxHp + ")");
+        log("> ⚔️ Attack naik    : +3 (Sekarang " + attack + ")");
         if (level % 2 == 0) {
             gainReputation(3);
-            System.out.println("► Reputasi toko ikut naik karena tokomu makin dikenal!");
+            log("> ⭐ Reputasi naik  : +3 (Bonus level genap)");
         }
+        updateGUI();
     }
 
-    // ── Reputation ──────────────────────────────
     public void gainReputation(int amount) {
         if (amount <= 0) return;
         reputation = Math.min(reputation + amount, 100);
-        System.out.println("🌟 Reputasi toko naik +" + amount + " (Sekarang: " + reputation + ")");
+        log("⭐ Reputasi naik +" + amount + " (Sekarang: " + reputation + ")");
+        updateGUI();
     }
 
     public void loseReputation(int amount) {
         reputation = Math.max(reputation - amount, 0);
-        System.out.println("📉 Reputasi toko turun -" + amount + " (Sekarang: " + reputation + ")");
+        log("💢 Reputasi turun -" + amount + " (Sekarang: " + reputation + ")");
+        updateGUI();
     }
 
-    // ── Inventory ───────────────────────────────
     public void addItem(Item item) {
         if (item == null) return;
         inventory.add(item);
-        // Tidak print setiap kali beli supaya tidak spam
+    }
+
+    public int useHealthItem() {
+        for (int i = 0; i < inventory.size(); i++) {
+            Item item = inventory.get(i);
+            String n = item.getName().toLowerCase();
+            if (n.contains("potion") || n.contains("elixir") || n.contains("herbal") || n.contains("remedy")) {
+                int healAmount = item.getSellPrice() / 2;
+                healAmount = Math.max(healAmount, 15);
+                inventory.remove(i);
+                log("🧪 Kamu menggunakan " + item.getName() + "!");
+                healHp(healAmount);
+                return healAmount;
+            }
+        }
+        log("❌ Tidak ada potion di inventory!");
+        return 0;
+    }
+
+    public boolean hasHealthItem() {
+        for (Item item : inventory) {
+            String n = item.getName().toLowerCase();
+            if (n.contains("potion") || n.contains("elixir") || n.contains("herbal") || n.contains("remedy"))
+                return true;
+        }
+        return false;
     }
 
     public void showInventory() {
-        System.out.println("\n" + "═".repeat(45));
-        System.out.println("              INVENTORY TOKO");
-        System.out.println("═".repeat(45));
-
+        log("\n=============================================");
+        log("              INVENTORY TOKO");
+        log("=============================================");
         if (inventory.isEmpty()) {
-            System.out.println("Inventory masih kosong.");
-            System.out.println("Item akan masuk sini ketika customer membeli.");
+            log("Inventory masih kosong.");
         } else {
             for (int i = 0; i < inventory.size(); i++) {
-                System.out.print((i + 1) + ". ");
-                inventory.get(i).showInfo();
+                log((i + 1) + ". " + inventory.get(i).getName());
             }
-            System.out.println("\nTotal: " + inventory.size() + " item");
+            log("\nTotal: " + inventory.size() + " item");
         }
-        System.out.println("═".repeat(45));
+        log("=============================================");
     }
 
-    // ── Status ──────────────────────────────────
     public void showStatus() {
-        System.out.println("=== STATUS TOKO " + name.toUpperCase() + " ===");
-        System.out.println("Level       : " + level);
-        System.out.println("Gold        : " + gold);
-        System.out.println("EXP         : " + exp + " / " + expNeeded());
-        System.out.println("Reputasi    : " + reputation + " / 100  " + reputationBar());
-        System.out.println("Item        : " + inventory.size() + " item");
-        System.out.println("====================================\n");
+        log("\n=== STATUS TOKO " + name.toUpperCase() + " ===");
+        log("Level       : " + level);
+        log("Gold        : " + gold);
+        log("EXP         : " + exp + " / " + expNeeded());
+        log("HP          : " + hp + " / " + maxHp);
+        log("Reputasi    : " + reputation + " / 100");
+        log("Item        : " + inventory.size() + " item");
+        log("====================================\n");
     }
 
-    // Visual bar reputasi
-    private String reputationBar() {
-        int filled = reputation / 10;
-        return "[" + "█".repeat(filled) + "░".repeat(10 - filled) + "]";
+    public void showCombatStatus() {
+        log("  " + name + "  HP: " + hp + "/" + maxHp 
+                         + "  ATK: " + attack + "  Gold: " + gold
+                         + (hasHealthItem() ? "  [Punya Potion]" : ""));
     }
 }

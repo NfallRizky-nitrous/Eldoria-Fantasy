@@ -1,8 +1,24 @@
+/*
+ * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
+ * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
+ */
+package com.mycompany.fantasy.shop;
+
+/**
+ *
+ * @author Asus
+ */
+import com.mycompany.fantasy.shop.gui.GameGUI;
+import com.mycompany.fantasy.shop.gui.CombatGUI;
+import com.mycompany.fantasy.shop.gui.ShopGUI;
+import com.mycompany.fantasy.shop.gui.GUIBridge;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
 
 public class GameManager {
+
     private Player player;
     private Shop shop;
     private Event eventSystem;
@@ -11,41 +27,125 @@ public class GameManager {
     private boolean gameRunning = true;
     private boolean shopOpenedToday = false;
     private boolean storyToldToday = false;
+    private boolean guiMode = false;
 
     private List<Soldier> availableSoldiers;
     private StoryManager storyManager;
 
-    public GameManager() {
-    // 1. Siapkan sistem dasar dulu
-    shop = new Shop();
-    eventSystem = new Event();
-    storyManager = new StoryManager();
-    availableSoldiers = new ArrayList<>();
-    availableSoldiers.add(Soldier.createPrajurit());
-    availableSoldiers.add(Soldier.createVeteran());
-    availableSoldiers.add(Soldier.createKapten());
+    // ================== GUI SUPPORT ==================
+    private GameGUI gui;
 
-    // 2. Tampilkan Menu
-    System.out.println("Welcome To The Solhaven Rudoria Game");
-    System.out.println("1. PLAY (Main Baru)");
-    System.out.println("2. LOAD (Lanjutkan)");
-    System.out.print("Pilih (1/2): ");
-    
-    String choice = scanner.nextLine().trim();
+    public void setGUI(GameGUI gui) {
+        this.gui = gui;
+        this.guiMode = true;
 
-    if (choice.equals("2")) {
-        // JIKA PILIH LOAD
-        loadGame(); // Memanggil fungsi loadGame yang sudah kamu buat
-    } else {
-        // JIKA PILIH PLAY (Atau input selain 2)
-        System.out.print("Masukkan nama penjaga toko: ");
-        String name = scanner.nextLine().trim();
-        if (name.isEmpty()) name = "Penjaga";
-        player = new Player(name);
+        // Hubungkan bridge ke Event dan StoryManager
+        GUIBridge bridge = (GUIBridge) gui;
+        eventSystem.setBridge(bridge);
+        storyManager.setBridge(bridge);
     }
-}
 
+    /** Routing output: GUI atau console */
+    private void out(String text) {
+        if (gui != null) {
+            gui.appendToOutput(text);
+        } else {
+            System.out.println(text);
+        }
+    }
+
+    // ================== GETTER ==================
+    public Player getPlayer()          { return player; }
+    public int getDay()                { return day; }
+    public boolean isShopOpenedToday() { return shopOpenedToday; }
+    public Shop getShop()              { return shop; }
+
+    // ================== OUTPUT BUFFER ==================
+    private StringBuilder output = new StringBuilder();
+
+    public String flushOutput() {
+        String result = output.toString();
+        output.setLength(0);
+        return result;
+    }
+
+    // ================== KONSTRUKTOR ==================
+    public GameManager() {
+        shop = new Shop();
+        eventSystem = new Event();
+        storyManager = new StoryManager();
+        availableSoldiers = new ArrayList<>();
+        availableSoldiers.add(Soldier.createPrajurit());
+        availableSoldiers.add(Soldier.createVeteran());
+        availableSoldiers.add(Soldier.createKapten());
+        // Catatan: player di-inisialisasi via initNewGame() atau loadGameGUI() dari GUI
+        // Untuk mode console, player di-inisialisasi di startGame()
+    }
+
+    // ================== INIT (dipanggil dari GameGUI) ==================
+    /** Inisialisasi game baru. Dipanggil dari GameGUI setelah input nama. */
+    public void initNewGame(String name) {
+        if (name == null || name.trim().isEmpty()) name = "Penjaga";
+        player = new Player(name, 200);
+    }
+
+    /** Load game lewat GUI — terima nama save sebagai parameter, tidak pakai Scanner. */
+    public void loadGameGUI(String saveName) {
+        try {
+            java.io.File file = new java.io.File(saveName + ".txt");
+            if (!file.exists()) {
+                player = new Player(saveName, 200);
+                return;
+            }
+            java.util.Scanner sc = new java.util.Scanner(file);
+            String playerName = sc.nextLine();
+            int hp       = Integer.parseInt(sc.nextLine());
+            int maxHp    = Integer.parseInt(sc.nextLine());
+            int gold     = Integer.parseInt(sc.nextLine());
+            int rep      = Integer.parseInt(sc.nextLine());
+            int savedDay = Integer.parseInt(sc.nextLine());
+            sc.close();
+
+            player = new Player(playerName, 200);
+            player.setHp(hp);
+            player.setMaxHp(maxHp);
+            player.setGold(gold);
+            player.setReputation(rep);
+            day = savedDay;
+        } catch (Exception e) {
+            player = new Player(saveName, 200);
+        }
+    }
+
+    // ================== START GAME GUI ==================
+    public String startGameGUI() {
+        output.setLength(0);
+        out("==================================================");
+        out("              SELAMAT DATANG DI RUDORIA");
+        out("==================================================");
+        out("Versi GUI telah aktif.");
+        out("Gunakan tombol-tombol di bawah untuk bermain.");
+        out("");
+        return flushOutput();
+    }
+
+    // ================== START GAME CONSOLE ==================
     public void startGame() {
+        // Mode console: tanya nama di sini
+        out("Welcome To The Solhaven Rudoria Game");
+        out("1. PLAY (Main Baru)");
+        out("2. LOAD (Lanjutkan)");
+        out("Pilih (1/2): ");
+        String choice = scanner.nextLine().trim();
+        if (choice.equals("2")) {
+            loadGame();
+        } else {
+            out("Masukkan nama penjaga toko: ");
+            String name = scanner.nextLine().trim();
+            if (name.isEmpty()) name = "Penjaga";
+            player = new Player(name, 200);
+        }
+
         printIntroStory();
         while (gameRunning && day <= 40) {
             dailyMenu();
@@ -53,206 +153,243 @@ public class GameManager {
         showFinalEnding();
     }
 
-    // Intro 
-    private void printIntroStory() {
-        System.out.println("\n" + "=".repeat(60));
-        System.out.println("          SELAMAT DATANG DI RUDORIA");
-        System.out.println("=".repeat(60));
-        System.out.println();
-        System.out.println("Di sebuah desa kecil yang tenang di dunia Rudoria,");
-        System.out.println("terdapat sebuah toko tua yang dulu sangat terkenal.");
-        System.out.println();
-        System.out.println("Suatu hari, seorang kakek tua pemilik toko berkata padamu:");
-        System.out.println("\"Aku sudah tidak mampu menjaga tempat ini lagi...\"");
-        System.out.println("\"Lanjutkanlah toko ini, nak...\"");
-        System.out.println();
-        System.out.println("Tanpa banyak pilihan, kamu menerima tawaran itu.");
-        System.out.println("Hari ini adalah hari pertamamu sebagai penjaga toko baru.");
-        System.out.println();
-        System.out.println("Apakah kamu bisa mengembalikan kejayaan toko ini?");
-        System.out.println("Tekan Enter untuk memulai perjalananmu...");
-        scanner.nextLine();
-    }
-    
-    //save & load
-   public void saveGame() {
-    try {
-        String filename = player.getName() + ".txt"; // <-- INI YANG BARU
-        java.io.FileWriter writer = new java.io.FileWriter(filename);
+    // ================== HANDLE GUI ==================
+    public String handleChoiceGUI(int choice) {
+        output.setLength(0);
 
-        writer.write(player.getName() + "\n");
-        writer.write(player.getHp() + "\n");
-        writer.write(player.getMaxHp() + "\n");
-        writer.write(player.getGold() + "\n");
-        writer.write(player.getReputation() + "\n");
-        writer.write(day + "\n");
-
-        writer.close();
-        System.out.println("Game disimpan sebagai: " + filename);
-    } catch (Exception e) {
-        System.out.println("Gagal save!");
-    }
-}
-   
-    public void loadGame() {
-    try {
-        System.out.print("Masukkan nama save: ");
-        String name = scanner.nextLine();
-
-        java.io.File file = new java.io.File(name + ".txt");
-
-        if (!file.exists()) {
-            System.out.println("Save tidak ditemukan!");
-            return;
+        switch (choice) {
+            case 1 -> {
+                if (!shopOpenedToday) {
+                    out("══════════════════════════════════════");
+                    out("           TOKO DIBUKA HARI INI");
+                    out("══════════════════════════════════════");
+                    openShopForTheDay();
+                } else {
+                    out("Toko sudah dibuka hari ini.");
+                }
+            }
+            case 2 -> {
+                out("=== BELI STOK ===");
+                shop.buyStockMenu(player);
+            }
+            case 3 -> {
+                out("=== KELOLA STOK ===");
+                shop.manageInventory(player);
+            }
+            case 4 -> {
+                out("=== UPGRADE TOKO ===");
+                shop.upgradeMenu(player);
+            }
+            case 5 -> {
+                out("=== KELOLA SOLDIER ===");
+                manageSoldiers();
+            }
+            case 6 -> {
+                out("=== AKHIRI HARI ===");
+                endTheDay();
+            }
+            case 7 -> {
+                out("Terima kasih telah bermain di Rudoria.");
+                gameRunning = false;
+            }
+            case 8 -> {
+                saveGame();
+                out("Game berhasil disimpan!");
+            }
+            default -> out("Pilihan tidak valid.");
         }
 
-        java.util.Scanner sc = new java.util.Scanner(file);
-
-        String playerName = sc.nextLine();
-        int hp = Integer.parseInt(sc.nextLine());
-        int maxHp = Integer.parseInt(sc.nextLine());
-        int gold = Integer.parseInt(sc.nextLine());
-        int rep = Integer.parseInt(sc.nextLine());
-        int savedDay = Integer.parseInt(sc.nextLine());
-
-        player = new Player(playerName);
-        player.setHp(hp);
-        player.setMaxHp(maxHp);
-        player.setGold(gold);
-        player.setReputation(rep);
-
-        day = savedDay;
-
-        sc.close();
-        System.out.println("Game berhasil di-load!");
-    } catch (Exception e) {
-        System.out.println("Gagal load!");
+        updateGUIStatus();
+        return flushOutput();
     }
-}
 
-    // ?????? Menu Harian ?????????????????????????????????????????????????????????????????????????????????????????????
+    private void updateGUIStatus() {
+        if (gui != null) gui.updateStatus();
+    }
+
+    private void pause() {
+        out(">>> Klik OK untuk melanjutkan <<<");
+        if (gui != null) {
+            gui.waitForContinue();
+        } else {
+            scanner.nextLine();
+        }
+    }
+
+    // ================== INTRO ==================
+    private void printIntroStory() {
+        out("\n" + "=".repeat(60));
+        out("          SELAMAT DATANG DI RUDORIA");
+        out("=".repeat(60));
+        out("");
+        out("Di sebuah desa kecil yang tenang di dunia Rudoria,");
+        out("terdapat sebuah toko tua yang dulu sangat terkenal.");
+        out("");
+        out("Suatu hari, seorang kakek tua pemilik toko berkata padamu:");
+        out("\"Aku sudah tidak mampu menjaga tempat ini lagi...\"");
+        out("\"Lanjutkanlah toko ini, nak...\"");
+        out("");
+        out("Tanpa banyak pilihan, kamu menerima tawaran itu.");
+        out("Hari ini adalah hari pertamamu sebagai penjaga toko baru.");
+        out("");
+        out("Apakah kamu bisa mengembalikan kejayaan toko ini?");
+        pause();
+    }
+
+    // ================== SAVE & LOAD ==================
+    public void saveGame() {
+        try {
+            String filename = player.getName() + ".txt";
+            java.io.FileWriter writer = new java.io.FileWriter(filename);
+            writer.write(player.getName() + "\n");
+            writer.write(player.getHp() + "\n");
+            writer.write(player.getMaxHp() + "\n");
+            writer.write(player.getGold() + "\n");
+            writer.write(player.getReputation() + "\n");
+            writer.write(day + "\n");
+            writer.close();
+            out("Game disimpan sebagai: " + filename);
+        } catch (Exception e) {
+            out("Gagal save!");
+        }
+    }
+
+    public void loadGame() {
+        try {
+            out("Masukkan nama save: ");
+            String name = scanner.nextLine();
+            java.io.File file = new java.io.File(name + ".txt");
+
+            if (!file.exists()) {
+                out("Save tidak ditemukan!");
+                return;
+            }
+
+            java.util.Scanner sc = new java.util.Scanner(file);
+            String playerName = sc.nextLine();
+            int hp       = Integer.parseInt(sc.nextLine());
+            int maxHp    = Integer.parseInt(sc.nextLine());
+            int gold     = Integer.parseInt(sc.nextLine());
+            int rep      = Integer.parseInt(sc.nextLine());
+            int savedDay = Integer.parseInt(sc.nextLine());
+            sc.close();
+
+            player = new Player(playerName, 200);
+            player.setHp(hp);
+            player.setMaxHp(maxHp);
+            player.setGold(gold);
+            player.setReputation(rep);
+            day = savedDay;
+
+            out("Game berhasil di-load!");
+        } catch (Exception e) {
+            out("Gagal load!");
+        }
+    }
+
+    // ================== MENU HARIAN (Console) ==================
     private void dailyMenu() {
-        // Snapshot di awal hari untuk ringkasan nanti
         player.snapshotDayStart();
 
-        // Tampilkan story beat kalau ada di hari ini (hanya sekali)
         if (!storyToldToday) {
             storyManager.checkStory(day, player);
             storyToldToday = true;
         }
 
-        System.out.println("\n" + "=".repeat(50));
-        System.out.printf("          HARI KE-%d / 40", day);
-        printSpecialDayLabel();
-        System.out.println("\n" + "=".repeat(50));
+        out("\n" + "=".repeat(50));
+        out("          HARI KE-" + day + " / 40" + getSpecialDayLabel());
+        out("=".repeat(50));
         player.showStatus();
 
-        System.out.println("Apa yang akan kamu lakukan hari ini?");
-        System.out.println("1. " + (shopOpenedToday ? "[Toko sudah dibuka hari ini]"
-                                                     : "Buka Toko          (Layani customer)"));
-        System.out.println("2. Beli Stok               (Isi barang dagangan)");
-        System.out.println("3. Kelola Stok             (Lihat / buang item)");
-        System.out.println("4. Upgrade Toko            (Butuh Gold)");
-        System.out.println("5. Kelola Soldier          (Rekrut / Lihat)");
-        System.out.println("6. Akhiri Hari             (tidur)");
-        System.out.println("7. Keluar Game");
-        System.out.println("8. Save Game");
-        System.out.print("Pilih (1-7): ");
+        out("Apa yang akan kamu lakukan hari ini?");
+        out("1. " + (shopOpenedToday ? "[Toko sudah dibuka hari ini]" : "Buka Toko          (Layani customer)"));
+        out("2. Beli Stok               (Isi barang dagangan)");
+        out("3. Kelola Stok             (Lihat / buang item)");
+        out("4. Upgrade Toko            (Butuh Gold)");
+        out("5. Kelola Soldier          (Rekrut / Lihat)");
+        out("6. Akhiri Hari             (tidur)");
+        out("7. Keluar Game");
+        out("8. Save Game");
+        out("Pilih (1-8): ");
 
         int choice = getChoice(1, 8);
         switch (choice) {
-            case 1 -> { if (!shopOpenedToday) openShopForTheDay();
-                        else System.out.println("Toko sudah dibuka hari ini."); }
+            case 1 -> { if (!shopOpenedToday) openShopForTheDay(); else out("Toko sudah dibuka hari ini."); }
             case 2 -> shop.buyStockMenu(player);
             case 3 -> shop.manageInventory(player);
             case 4 -> shop.upgradeMenu(player);
             case 5 -> manageSoldiers();
             case 6 -> endTheDay();
-            case 7 -> { System.out.println("Terima kasih telah bermain di Rudoria."); gameRunning = false; }
+            case 7 -> { out("Terima kasih telah bermain di Rudoria."); gameRunning = false; }
             case 8 -> saveGame();
         }
     }
 
-    // ?????? Hari Spesial ??????????????????????????????????????????????????????????????????????????????????????????
-    private void printSpecialDayLabel() {
-        if (day % 10 == 0) System.out.print("  [HARI BOSS!]");
-        else if (day % 5 == 0) System.out.print("  [HARI PASAR]");
-        else if (day == 35)    System.out.print("  [HARI NAGA!]");
+    // ================== HARI SPESIAL ==================
+    private String getSpecialDayLabel() {
+        if (day % 10 == 0) return "  [HARI BOSS!]";
+        if (day % 5 == 0)  return "  [HARI PASAR]";
+        if (day == 35)     return "  [HARI NAGA!]";
+        return "";
     }
 
     private boolean isMarketDay() { return day % 5 == 0 && day % 10 != 0; }
     private boolean isBossDay()   { return day % 10 == 0; }
 
-    // ?????? Buka Toko ???????????????????????????????????????????????????????????????????????????????????????????????????
+    // ================== BUKA TOKO ==================
     private void openShopForTheDay() {
         shopOpenedToday = true;
         eventSystem.resetDailyEvents();
 
-        // Hari Pasar: semua customer hadir, bonus gold
         if (isMarketDay()) {
-            System.out.println("\n== HARI PASAR! Desa ramai, lebih banyak pembeli hari ini! ==\n");
+            out("\n=== HARI PASAR! Desa sedang ramai ===\n");
         } else {
-            System.out.println("\nToko dibuka... Angin pagi bertiup pelan.");
-            System.out.println("Customer mulai berdatangan.\n");
+            out("\nToko dibuka... Customer mulai berdatangan.\n");
         }
 
-        // MAX 3 customer ??? naik 1 tiap 2 level, tapi tetap max 3
         int customerCount = Math.min(2 + (player.getLevel() / 2), 3);
-        // Hari pasar: bonus 1 customer
         if (isMarketDay()) customerCount = Math.min(customerCount + 1, 4);
 
-        for (int i = 1; i <= customerCount; i++) {
-            System.out.println("-".repeat(40));
-            System.out.println("Customer ke-" + i + " dari " + customerCount);
-            System.out.println("-".repeat(40));
+        out("Hari ini ada " + customerCount + " customer.");
 
-            // Player layani customer ??? pilih item & set harga
-            if (isMarketDay()) {
-                shop.serveCustomer(player, true);
-            } else {
-                shop.serveCustomer(player, false);
-            }
+        for (int i = 1; i <= customerCount; i++) {
+            out("\n────────────────────────────");
+            out("Customer ke-" + i + " dari " + customerCount);
+            out("────────────────────────────");
+
+            if (isMarketDay()) shop.serveCustomer(player, true);
+            else               shop.serveCustomer(player, false);
 
             eventSystem.triggerEvent(player);
 
-            // 15% chance combat siang setelah customer pertama
-            if (i > 1 && Math.random() < 0.15) {
-                System.out.println("\n[!!] Tiba-tiba ada yang menyerang toko di siang hari!");
-                triggerCombat(chooseDayEnemy());
-                if (!player.isAlive()) return;
-            }
+            if (i < customerCount) pause();
         }
 
-        System.out.println("\nToko ditutup untuk hari ini.");
+        out("\nToko ditutup untuk hari ini.");
     }
 
-    // ?????? Akhiri Hari ?????????????????????????????????????????????????????????????????????????????????????????????
+    // ================== AKHIRI HARI ==================
     private void endTheDay() {
-        // Tampilkan ringkasan hari ini
         player.showDailySummary(day);
 
-        System.out.println("\nHari berakhir. Kamu menutup toko dan beristirahat.");
+        out("\nHari berakhir. Kamu menutup toko dan beristirahat.");
 
-        // Bayar upah soldier
         payAllSoldierWages();
-
-        // Pulihkan HP
         player.restHeal();
 
         // Event malam
         double nightRoll = Math.random();
         if (nightRoll < 0.20) {
-            System.out.println("\nMalam ini terasa tidak tenang...");
+            out("\nMalam ini terasa tidak tenang...");
             eventSystem.thiefEvent(player);
         } else if (nightRoll < 0.35) {
-            System.out.println("\n[!!] Serangan malam! Musuh menyusup ke toko!");
+            out("\n[!!] Serangan malam! Musuh menyusup ke toko!");
             triggerCombat(chooseNightEnemy());
             if (!player.isAlive()) return;
         } else {
-            System.out.println("Malam berlalu dengan tenang.");
+            out("Malam berlalu dengan tenang.");
         }
 
-        // Bonus reputasi kalau toko dibuka hari ini
         if (shopOpenedToday) player.gainReputation(1);
 
         day++;
@@ -261,116 +398,139 @@ public class GameManager {
 
         // Boss day setiap 10 hari
         if (isBossDay()) {
-            System.out.println("\n[BOSS] Ancaman besar mendekat ke desa Rudoria!");
-            System.out.println("Tekan Enter untuk menghadapi boss...");
-            scanner.nextLine();
+            out("\n[BOSS] Ancaman besar mendekat ke desa Rudoria!");
+            out("Tekan OK untuk menghadapi boss...");
+            pause();
             triggerCombat(Enemy.createKsatriaJahat());
             if (!player.isAlive()) return;
         }
 
         // Naga hari ke-35
         if (day == 35) {
-            System.out.println("\n[NAGA] Langit memerah... Naga Rudoria telah terbangun!");
-            System.out.println("Tekan Enter untuk menghadapi Naga...");
-            scanner.nextLine();
+            out("\n[NAGA] Langit memerah... Naga Rudoria telah terbangun!");
+            out("Tekan OK untuk menghadapi Naga...");
+            pause();
             triggerCombat(Enemy.createNaga());
             if (!player.isAlive()) return;
         }
 
         // Cek menang
         if (player.getReputation() >= 92) {
-            System.out.println("\nReputasi tokomu luar biasa! Seluruh Rudoria mengenalmu!");
+            out("\nReputasi tokomu luar biasa! Seluruh Rudoria mengenalmu!");
             gameRunning = false;
         }
     }
 
-    // ?????? Combat ????????????????????????????????????????????????????????????????????????????????????????????????????????????
+    // ================== COMBAT ==================
     private void triggerCombat(Enemy enemy) {
-        CombatSystem.startCombat(player, enemy, availableSoldiers);
-        if (!player.isAlive()) {
-            System.out.println("\nHP kamu habis. GAME OVER.");
-            gameRunning = false;
+        if (gui != null) {
+            CombatGUI combatWindow = new CombatGUI(gui, player, enemy, availableSoldiers);
+            combatWindow.setVisible(true);
+
+            if (!player.isAlive()) {
+                out("\nHP kamu habis. GAME OVER.");
+                gameRunning = false;
+            } else {
+                out("\nPertarungan selesai. Kamu selamat.");
+            }
+            updateGUIStatus();
+        } else {
+            CombatSystem.startCombat(player, enemy, availableSoldiers);
+            if (!player.isAlive()) {
+                out("\nHP kamu habis. GAME OVER.");
+                gameRunning = false;
+            }
         }
     }
 
-    private Enemy chooseDayEnemy() {
-        return Math.random() < 0.6 ? Enemy.createBandit() : Enemy.createPreman();
-    }
+    private Enemy chooseDayEnemy()   { return Math.random() < 0.6  ? Enemy.createBandit()      : Enemy.createPreman(); }
+    private Enemy chooseNightEnemy() { return Math.random() < 0.65 ? Enemy.createPreman()       : Enemy.createKsatriaJahat(); }
 
-    private Enemy chooseNightEnemy() {
-        return Math.random() < 0.65 ? Enemy.createPreman() : Enemy.createKsatriaJahat();
-    }
-
-    // ?????? Soldier ?????????????????????????????????????????????????????????????????????????????????????????????????????????
+    // ================== SOLDIER ==================
     private void manageSoldiers() {
         while (true) {
-            System.out.println("\n=== KELOLA SOLDIER ===");
+            out("\n=== KELOLA SOLDIER ===");
             for (int i = 0; i < availableSoldiers.size(); i++) {
-                System.out.println((i + 1) + ".");
+                out((i + 1) + ".");
                 availableSoldiers.get(i).showInfo();
-                System.out.println();
+                out("");
             }
-            System.out.println((availableSoldiers.size() + 1) + ". Kembali");
-            System.out.print("Pilih: ");
+            out((availableSoldiers.size() + 1) + ". Kembali");
+            out("Pilih: ");
 
             int choice = getChoice(1, availableSoldiers.size() + 1);
             if (choice == availableSoldiers.size() + 1) break;
 
             Soldier chosen = availableSoldiers.get(choice - 1);
             if (!chosen.isRecruited()) chosen.recruit(player);
-            else System.out.println(chosen.getName() + " sudah bersamamu.");
+            else out(chosen.getName() + " sudah bersamamu.");
         }
     }
 
     private void payAllSoldierWages() {
         boolean any = availableSoldiers.stream().anyMatch(Soldier::isRecruited);
         if (!any) return;
-        System.out.println("\nMembayar upah soldier...");
+        out("\nMembayar upah soldier...");
         for (Soldier s : availableSoldiers) {
             if (s.isRecruited()) s.payDailyWage(player);
         }
     }
 
-    // ?????? Final Ending ??????????????????????????????????????????????????????????????????????????????????????????
+    // ================== FINAL ENDING ==================
     private void showFinalEnding() {
-        System.out.println("\n" + "=".repeat(60));
-        System.out.println("                    AKHIR CERITA");
-        System.out.println("=".repeat(60));
+        out("\n" + "=".repeat(60));
+        out("                    AKHIR CERITA");
+        out("=".repeat(60));
 
         if (!player.isAlive()) {
-            System.out.println("\nKamu gugur dalam pertempuran di hari ke-" + day + ".");
-            System.out.println("Toko Rudoria kembali sunyi tanpa penjaganya...");
+            out("\nKamu gugur dalam pertempuran di hari ke-" + day + ".");
+            out("Toko Rudoria kembali sunyi tanpa penjaganya...");
         } else if (player.getReputation() >= 90) {
-            System.out.println("\nBeberapa bulan kemudian...");
-            System.out.println("Pemilik toko lama kembali berkunjung ke desa.");
-            System.out.println("Ia terkejut melihat toko yang dulu sepi kini ramai.");
-            System.out.println();
-            System.out.println("*** SELAMAT! KAMU BERHASIL MENGEMBALIKAN KEJAYAAN TOKO RUDORIA! ***");
+            out("\nBeberapa bulan kemudian...");
+            out("Pemilik toko lama kembali berkunjung ke desa.");
+            out("Ia terkejut melihat toko yang dulu sepi kini ramai.");
+            out("");
+            out("*** SELAMAT! KAMU BERHASIL MENGEMBALIKAN KEJAYAAN TOKO RUDORIA! ***");
         } else if (player.getReputation() >= 60) {
-            System.out.println("\nToko kamu sudah cukup terkenal di desa.");
-            System.out.println("Perjalananmu belum selesai, tapi kamu sudah membuktikan dirimu.");
+            out("\nToko kamu sudah cukup terkenal di desa.");
+            out("Perjalananmu belum selesai, tapi kamu sudah membuktikan dirimu.");
         } else {
-            System.out.println("\nSetelah " + (day - 1) + " hari, toko masih bertahan.");
-            System.out.println("Perjalananmu masih panjang untuk mengembalikan kejayaannya.");
+            out("\nSetelah " + (day - 1) + " hari, toko masih bertahan.");
+            out("Perjalananmu masih panjang untuk mengembalikan kejayaannya.");
         }
 
-        System.out.println();
+        out("");
         player.showStatus();
-        System.out.println("Terima kasih telah bermain!");
+        out("Terima kasih telah bermain!");
     }
 
-    // ?????? Helper ????????????????????????????????????????????????????????????????????????????????????????????????????????????
+    // ================== OPEN SHOP (GUI) ==================
+    public void openShop() {
+        if (guiMode && gui != null) {
+            ShopGUI shopWindow = new ShopGUI(gui, player, shop);
+            shopWindow.setVisible(true);
+            gui.updateStatus();
+        } else {
+            out("Mode console tidak tersedia.");
+        }
+    }
+
+    // ================== HELPER ==================
     private int getChoice(int min, int max) {
         while (true) {
             try {
                 int input = scanner.nextInt();
                 scanner.nextLine();
                 if (input >= min && input <= max) return input;
-                System.out.print("Pilih " + min + "-" + max + ": ");
+                out("Pilih " + min + "-" + max + ": ");
             } catch (Exception e) {
                 scanner.nextLine();
-                System.out.print("Masukkan angka: ");
+                out("Masukkan angka: ");
             }
         }
+    }
+
+    public void setShopOpenedToday(boolean b) {
+        throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
     }
 }

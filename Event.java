@@ -1,69 +1,67 @@
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Random;
-import java.util.Scanner;
+/*
+ * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
+ * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
+ */
+package com.mycompany.fantasy.shop;
+/**
+ *
+ * @author Asus
+ */
 
+import com.mycompany.fantasy.shop.gui.GUIBridge;
+import java.util.*;
+
+/**
+ * Event.java — versi GUI.
+ * Semua getChoice() dan System.out sekarang routing lewat GUIBridge.
+ * Jika bridge = null, fallback ke Scanner (mode console tetap jalan).
+ */
 public class Event {
-    private final Random random = new Random();
+    private final Random  random  = new Random();
     private final Scanner scanner = new Scanner(System.in);
 
-    // Daftar event yang sudah muncul hari ini — reset tiap hari baru
     private final List<String> usedEventsToday = new ArrayList<>();
 
-    // Dipanggil di awal hari baru (dari Shop/Game loop)
+    // Bridge ke GUI — di-set dari GameManager
+    private GUIBridge bridge;
+
+    public void setBridge(GUIBridge bridge) {
+        this.bridge = bridge;
+    }
+
+    private void log(String text) {
+        if (bridge != null) bridge.appendLog(text);
+        else System.out.println(text);
+    }
+
+    // ── Reset harian ───────────────────────────────────────────────
     public void resetDailyEvents() {
         usedEventsToday.clear();
     }
 
-    // Ambil 1 event acak untuk customer ini
-    // Kembalikan false kalau tidak ada event (customer datang normal saja)
+    // ── Trigger event acak ─────────────────────────────────────────
     public boolean triggerEvent(Player player) {
         int reputation = player.getReputation();
 
-        // Buat pool event yang BELUM muncul hari ini
         List<String> available = new ArrayList<>();
-
-        // Bobot event disesuaikan reputasi
-        // Reputasi rendah  → lebih banyak event negatif
-        // Reputasi tinggi  → lebih banyak event positif
-
-        if (!usedEventsToday.contains("poorCustomer"))
-            available.add("poorCustomer");
-
-        if (!usedEventsToday.contains("angryCustomer"))
-            available.add("angryCustomer");
-
-        if (!usedEventsToday.contains("brokenItem"))
-            available.add("brokenItem");
-
-        if (!usedEventsToday.contains("thiefEvent"))
-            available.add("thiefEvent");
-
-        if (!usedEventsToday.contains("gangsterEvent"))
-            available.add("gangsterEvent");
-
-        // Event positif hanya masuk pool kalau reputasi cukup tinggi
+        if (!usedEventsToday.contains("poorCustomer"))    available.add("poorCustomer");
+        if (!usedEventsToday.contains("angryCustomer"))   available.add("angryCustomer");
+        if (!usedEventsToday.contains("brokenItem"))      available.add("brokenItem");
+        if (!usedEventsToday.contains("thiefEvent"))      available.add("thiefEvent");
+        if (!usedEventsToday.contains("gangsterEvent"))   available.add("gangsterEvent");
         if (reputation >= 25 && !usedEventsToday.contains("vipCustomer"))
             available.add("vipCustomer");
-
         if (reputation >= 40 && !usedEventsToday.contains("illegalDeal"))
             available.add("illegalDeal");
 
-        // Hitung peluang event muncul hari ini untuk customer ini
-        // Makin banyak customer sudah lewat, makin besar peluang event
-        int eventChance = 30 + (usedEventsToday.size() * 5); // 30%, 35%, 40%, dst
-        if (random.nextInt(100) >= eventChance || available.isEmpty()) {
-            return false; // Customer ini tidak dapat event
-        }
+        int eventChance = 30 + (usedEventsToday.size() * 5);
+        if (random.nextInt(100) >= eventChance || available.isEmpty()) return false;
 
-        // Pilih event acak dari pool yang tersedia
         Collections.shuffle(available, random);
-        String chosenEvent = available.get(0);
-        usedEventsToday.add(chosenEvent);
+        String chosen = available.get(0);
+        usedEventsToday.add(chosen);
 
-        // Jalankan event
-        switch (chosenEvent) {
+        switch (chosen) {
             case "poorCustomer"  -> poorCustomer(player);
             case "angryCustomer" -> angryCustomer(player);
             case "brokenItem"    -> brokenItem(player);
@@ -72,155 +70,249 @@ public class Event {
             case "vipCustomer"   -> vipCustomer(player);
             case "illegalDeal"   -> illegalDeal(player);
         }
-
         return true;
     }
 
-    // ─────────────────────────────────────────
-    // EVENT DEFINITIONS
-    // ─────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════
+    //  EVENT DEFINITIONS
+    // ══════════════════════════════════════════════════════════════
 
-    // 1. Customer Miskin (pilihan moral)
     private void poorCustomer(Player player) {
-        System.out.println("\n Seorang ibu desa datang dengan wajah cemas.");
-        System.out.println("Anaknya sakit dan butuh potion, tapi dia hanya punya 10 gold...");
-        System.out.println("1. Kasih potion secara gratis");
-        System.out.println("2. Tetap jual dengan harga normal");
-        int choice = getChoice(1, 2);
+        String narrative =
+            "Seorang ibu desa datang dengan wajah cemas.\n" +
+            "Anaknya sakit dan butuh potion, tapi dia hanya punya 10 gold...\n\n" +
+            "Apa yang akan kamu lakukan?";
 
-        if (choice == 1) {
-            System.out.println("Ibu itu menangis haru dan berterima kasih padamu.");
-            player.gainReputation(5);
-            player.gainExp(12);
+        if (bridge != null) {
+            bridge.showDecision("🧓", "Customer Miskin", narrative,
+                new String[]{
+                    "Kasih potion secara gratis (+5 Reputasi, +12 EXP)",
+                    "Tetap jual dengan harga normal (+20 Gold, -2 Reputasi)"
+                },
+                choice -> {
+                    if (choice == 0) {
+                        log("Ibu itu menangis haru dan berterima kasih padamu.");
+                        player.gainReputation(5);
+                        player.gainExp(12);
+                    } else {
+                        log("Kamu tetap menjualnya. Ibu itu pergi dengan wajah sedih.");
+                        player.gainGold(20);
+                        player.loseReputation(2);
+                    }
+                    bridge.refreshStatus();
+                });
         } else {
-            System.out.println("Kamu tetap menjualnya. Ibu itu pergi dengan wajah sedih.");
-            player.gainGold(20);
-            player.loseReputation(2);
+            System.out.println("\n Seorang ibu desa datang dengan wajah cemas.");
+            System.out.println("1. Kasih potion secara gratis");
+            System.out.println("2. Tetap jual dengan harga normal");
+            int c = getChoiceConsole(1, 2);
+            if (c == 1) { player.gainReputation(5); player.gainExp(12); }
+            else { player.gainGold(20); player.loseReputation(2); }
         }
     }
 
-    // 2. Customer Marah (maksimal 1x per hari)
     private void angryCustomer(Player player) {
-        System.out.println("\n Seorang knight marah besar karena potion yang dibelinya kemarin tidak manjur.");
-        System.out.println("1. Turunkan harga & minta maaf");
-        System.out.println("2. Tolak dan suruh pergi");
-        int choice = getChoice(1, 2);
+        String narrative =
+            "Seorang knight marah besar karena potion yang dibelinya kemarin tidak manjur.\n\n" +
+            "Dia menuntut ganti rugi di depan banyak orang.\n" +
+            "Apa responmu?";
 
-        if (choice == 1) {
-            System.out.println("Knight itu akhirnya tenang dan mau beli lagi dengan harga diskon.");
-            player.gainGold(15);
-            player.gainReputation(3);
+        if (bridge != null) {
+            bridge.showDecision("😤", "Customer Marah", narrative,
+                new String[]{
+                    "Turunkan harga & minta maaf (+15 Gold, +3 Reputasi)",
+                    "Tolak dan suruh pergi (-4 Reputasi)"
+                },
+                choice -> {
+                    if (choice == 0) {
+                        log("Knight itu tenang dan mau beli lagi dengan harga diskon.");
+                        player.gainGold(15);
+                        player.gainReputation(3);
+                    } else {
+                        log("Knight itu pergi sambil mengumpat.");
+                        player.loseReputation(4);
+                    }
+                    bridge.refreshStatus();
+                });
         } else {
-            System.out.println("Knight itu pergi sambil mengumpat. Beberapa orang di desa mendengarnya.");
-            player.loseReputation(4);
+            System.out.println("\n Seorang knight marah besar...");
+            System.out.println("1. Turunkan harga & minta maaf");
+            System.out.println("2. Tolak dan suruh pergi");
+            int c = getChoiceConsole(1, 2);
+            if (c == 1) { player.gainGold(15); player.gainReputation(3); }
+            else player.loseReputation(4);
         }
     }
 
-    // 3. Barang Rusak
     private void brokenItem(Player player) {
-        System.out.println("\n Beberapa potion pecah di rak karena rak tua yang rapuh.");
-        System.out.println("Kamu kehilangan barang senilai 25 gold.");
-        player.spendGold(25);
+        String narrative =
+            "Beberapa potion pecah di rak karena rak tua yang rapuh.\n\n" +
+            "Kamu kehilangan barang senilai 25 gold.";
+
+        if (bridge != null) {
+            bridge.showContinue(narrative, () -> {
+                player.spendGold(25);
+                bridge.refreshStatus();
+            });
+        } else {
+            System.out.println("\n Beberapa potion pecah di rak...");
+            player.spendGold(25);
+        }
     }
 
-    // 4. Pencuri
     public void thiefEvent(Player player) {
-        System.out.println("\n MALAM INI - Suara mencurigakan terdengar di belakang toko!");
-        System.out.println("Seorang pencuri mencoba membobol gudang!");
-        System.out.println("1. Panggil prajurit kerajaan");
-        System.out.println("2. Abaikan dan diam saja");
-        int choice = getChoice(1, 2);
+        String narrative =
+            "MALAM INI — Suara mencurigakan terdengar di belakang toko!\n" +
+            "Seorang pencuri mencoba membobol gudang!\n\n" +
+            "Apa yang akan kamu lakukan?";
 
-        if (choice == 1) {
-            int successChance = 70 + (player.getLevel() * 5);
-            if (random.nextInt(100) < successChance) {
-                System.out.println("Prajurit datang cepat dan menangkap pencuri!");
-                player.gainGold(60);
-                player.gainExp(20);
-                player.gainReputation(3);
-            } else {
-                System.out.println("Prajurit terlambat... Pencuri kabur membawa beberapa barang.");
-                player.spendGold(45);
-                player.loseReputation(2);
-            }
+        if (bridge != null) {
+            bridge.showDecision("🦹", "Pencuri Malam!", narrative,
+                new String[]{
+                    "Panggil prajurit kerajaan (70% berhasil)",
+                    "Abaikan dan diam saja (-40 Gold, -5 Reputasi)"
+                },
+                choice -> {
+                    if (choice == 0) {
+                        int successChance = 70 + (player.getLevel() * 5);
+                        if (random.nextInt(100) < successChance) {
+                            log("Prajurit datang cepat dan menangkap pencuri! (+60 Gold, +3 Reputasi)");
+                            player.gainGold(60);
+                            player.gainExp(20);
+                            player.gainReputation(3);
+                        } else {
+                            log("Prajurit terlambat... Pencuri kabur membawa beberapa barang. (-45 Gold)");
+                            player.spendGold(45);
+                            player.loseReputation(2);
+                        }
+                    } else {
+                        log("Kamu memilih diam. Pencuri berhasil mencuri 40 gold.");
+                        player.spendGold(40);
+                        player.loseReputation(5);
+                    }
+                    bridge.refreshStatus();
+                });
         } else {
-            System.out.println("Kamu memilih diam. Pencuri berhasil mencuri 40 gold.");
-            player.spendGold(40);
-            player.loseReputation(5);
+            System.out.println("\n Suara mencurigakan...");
+            System.out.println("1. Panggil prajurit  2. Abaikan");
+            int c = getChoiceConsole(1, 2);
+            if (c == 1) {
+                if (random.nextInt(100) < 70) { player.gainGold(60); player.gainReputation(3); }
+                else { player.spendGold(45); }
+            } else { player.spendGold(40); player.loseReputation(5); }
         }
     }
 
-    // 5. Preman / Gangster
     private void gangsterEvent(Player player) {
-        System.out.println("\n Seorang preman dari geng lokal datang dengan sombong.");
-        System.out.println("\"Bayar pajak perlindungan kalau tidak mau toko rusak!\"");
-        System.out.println("1. Bayar 30 gold");
-        System.out.println("2. Panggil prajurit untuk melawan");
-        int choice = getChoice(1, 2);
+        String narrative =
+            "Seorang preman dari geng lokal datang dengan sombong.\n\n" +
+            "\"Bayar pajak perlindungan kalau tidak mau toko rusak!\"\n\n" +
+            "Apa yang akan kamu lakukan?";
 
-        if (choice == 1) {
-            player.spendGold(30);
-            System.out.println("Preman pergi sambil tertawa.");
-            player.loseReputation(1);
+        if (bridge != null) {
+            bridge.showDecision("🔪", "Preman Geng", narrative,
+                new String[]{
+                    "Bayar 30 gold (aman, tapi memalukan)",
+                    "Panggil prajurit untuk melawan (65% berhasil)"
+                },
+                choice -> {
+                    if (choice == 0) {
+                        player.spendGold(30);
+                        log("Preman pergi sambil tertawa. (-30 Gold, -1 Reputasi)");
+                        player.loseReputation(1);
+                    } else {
+                        if (random.nextInt(100) < 65) {
+                            log("Prajurit berhasil mengusir preman! (+50 Gold, +5 Reputasi)");
+                            player.gainGold(50);
+                            player.gainExp(18);
+                            player.gainReputation(5);
+                        } else {
+                            log("Toko sedikit rusak akibat perkelahian. (-65 Gold, -6 Reputasi)");
+                            player.spendGold(65);
+                            player.loseReputation(6);
+                        }
+                    }
+                    bridge.refreshStatus();
+                });
         } else {
-            if (random.nextInt(100) < 65) {
-                System.out.println("Prajurit berhasil mengusir preman tersebut!");
-                player.gainGold(50);
-                player.gainExp(18);
-                player.gainReputation(5);
-            } else {
-                System.out.println("Toko sedikit rusak akibat perkelahian...");
-                player.spendGold(65);
-                player.loseReputation(6);
+            System.out.println("\n Preman datang menagih pajak...");
+            System.out.println("1. Bayar 30 gold  2. Panggil prajurit");
+            int c = getChoiceConsole(1, 2);
+            if (c == 1) { player.spendGold(30); player.loseReputation(1); }
+            else {
+                if (random.nextInt(100) < 65) { player.gainGold(50); player.gainReputation(5); }
+                else { player.spendGold(65); player.loseReputation(6); }
             }
         }
     }
 
-    // 6. VIP Customer (butuh reputasi >= 25)
     private void vipCustomer(Player player) {
-        System.out.println("\n Seorang Mage terkenal dari kota besar masuk ke toko!");
-        System.out.println("Dia membeli banyak barang langka.");
-        player.gainGold(95);
-        player.gainExp(25);
-        player.gainReputation(4);
-    }
+        String narrative =
+            "Seorang Mage terkenal dari kota besar masuk ke toko!\n\n" +
+            "Dia membeli banyak barang langka dengan harga penuh.\n" +
+            "+95 Gold  |  +25 EXP  |  +4 Reputasi";
 
-    // 7. Tawaran Ilegal (butuh reputasi >= 40)
-    private void illegalDeal(Player player) {
-        System.out.println("\n Seorang pria berjubah hitam mendekatimu diam-diam.");
-        System.out.println("Dia menawarkan \"barang spesial\" yang sangat mahal harganya.");
-        System.out.println("1. Terima tawaran (keuntungan besar, tapi berisiko)");
-        System.out.println("2. Tolak dengan sopan");
-        int choice = getChoice(1, 2);
-
-        if (choice == 1) {
-            if (random.nextInt(100) < 55) {
-                System.out.println("Kesepakatan berhasil! Kamu mendapat keuntungan besar.");
-                player.gainGold(130);
-                player.gainReputation(2);
-            } else {
-                System.out.println("Ternyata itu jebakan! Kamu hampir ditangkap petugas kerajaan.");
-                player.spendGold(90);
-                player.loseReputation(10);
-            }
+        if (bridge != null) {
+            bridge.showContinue(narrative, () -> {
+                player.gainGold(95);
+                player.gainExp(25);
+                player.gainReputation(4);
+                bridge.refreshStatus();
+            });
         } else {
-            System.out.println("Kamu menolak tawaran itu. Pria itu pergi tanpa kata.");
+            System.out.println("\n Mage terkenal masuk ke toko!");
+            player.gainGold(95); player.gainExp(25); player.gainReputation(4);
         }
     }
 
-    // ─────────────────────────────────────────
-    // HELPER: input validation biar tidak crash
-    // ─────────────────────────────────────────
-    private int getChoice(int min, int max) {
+    private void illegalDeal(Player player) {
+        String narrative =
+            "Seorang pria berjubah hitam mendekatimu diam-diam.\n\n" +
+            "Dia menawarkan \"barang spesial\" yang sangat mahal harganya.\n" +
+            "Keuntungan besar... tapi berisiko tinggi.\n\n" +
+            "Apa keputusanmu?";
+
+        if (bridge != null) {
+            bridge.showDecision("🕵", "Tawaran Misterius", narrative,
+                new String[]{
+                    "Terima tawaran (55% dapat +130 Gold, 45% kehilangan -90 Gold)",
+                    "Tolak dengan sopan (aman)"
+                },
+                choice -> {
+                    if (choice == 0) {
+                        if (random.nextInt(100) < 55) {
+                            log("Kesepakatan berhasil! Kamu mendapat keuntungan besar. (+130 Gold)");
+                            player.gainGold(130);
+                            player.gainReputation(2);
+                        } else {
+                            log("Ternyata itu jebakan! Hampir ditangkap petugas kerajaan. (-90 Gold, -10 Reputasi)");
+                            player.spendGold(90);
+                            player.loseReputation(10);
+                        }
+                    } else {
+                        log("Kamu menolak tawaran itu. Pria itu pergi tanpa kata.");
+                    }
+                    bridge.refreshStatus();
+                });
+        } else {
+            System.out.println("\n Pria berjubah hitam menawarkan sesuatu...");
+            System.out.println("1. Terima  2. Tolak");
+            int c = getChoiceConsole(1, 2);
+            if (c == 1) {
+                if (random.nextInt(100) < 55) { player.gainGold(130); }
+                else { player.spendGold(90); player.loseReputation(10); }
+            }
+        }
+    }
+
+    // ── Console fallback ───────────────────────────────────────────
+    private int getChoiceConsole(int min, int max) {
         while (true) {
             try {
                 int input = scanner.nextInt();
+                scanner.nextLine();
                 if (input >= min && input <= max) return input;
-                System.out.println("Pilih antara " + min + " - " + max + ":");
-            } catch (Exception e) {
-                scanner.nextLine(); // buang input invalid
-                System.out.println("Masukkan angka yang valid:");
-            }
+            } catch (Exception e) { scanner.nextLine(); }
         }
     }
 }
